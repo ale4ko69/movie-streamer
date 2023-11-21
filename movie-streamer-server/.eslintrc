@@ -1,0 +1,45 @@
+{
+    "plugins": ["import"],
+    "rules": {
+      "import/no-unresolved": "error",
+      "import/extensions": [
+        "error",
+        "ignorePackages",
+        {
+          "js": "never",
+          "jsx": "never",
+          "ts": "never",
+          "tsx": "never"
+        }
+     ],
+     "no-unused-vars": "off"
+    },
+    "parser": "@typescript-eslint/parser",
+    "extends": [
+        "plugin:@typescript-eslint/recommended",
+        "eslint-config-airbnb-base",
+        "plugin:prettier/recommended"
+    ],
+    "parserOptions": {
+        "ecmaVersion": 2018,
+        "sourceType": "module"
+    },
+    "settings": {
+        "import/parsers": {
+          "@typescript-eslint/parser": [".ts",
+            ".tsx",
+            ".d.ts",
+            ".js",
+            ".jsx",
+            ".json",
+            ".node"
+          ]
+        },
+        "import/resolver": {
+          "typescript": {
+            "alwaysTryTypes": true,
+            "project": "./src"
+          }
+        }
+      }
+}

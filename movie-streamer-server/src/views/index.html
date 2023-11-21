@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Player</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.5.1/axios.min.js"
+        integrity="sha512-emSwuKiMyYedRwflbZB2ghzX8Cw8fmNVgZ6yQNNXXagFzFOaQmbvQ1vmDkddHjm5AITcBIZfC7k4ShQSjgPAmQ=="
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+
+<body>
+    <div id="app">
+
+        <div :class="selectedSearchType === 1 ? 'show' : 'hide' ">
+            <h2>Search Movies Kinopoisk</h2>
+            <input type="search" placeholder="Write move name or part" name="nm" @change="onMovieType($event)" :model="searchText" />
+            &nbsp;
+            <button @click="searchMovie()">Search Movies</button>
+            <br /><br />
+            <div id="result">
+                <ul>
+                    <li v-for="movie in movies" :key="movie.m_id">
+                        {{ movie.m_title }} {{ movie.m_orig_title ? `(${movie.m_orig_title})`  + ',' : '' }} {{movie.m_duration}}, {{movie.m_year}}<br />
+                        Country: {{ movie.m_country }}<br />
+                        Director: {{movie.m_director}}<br />
+                        Category: {{movie.m_category}}<br />
+                        <button @click="getTorrentsInfo(movie.m_title)">Get Torrents</button>&nbsp;<button @click="getStreams(movie.m_id)">Get Streams</button>
+                        <div id="streams" style="max-height: 350px; overflow:auto;">
+                            <ul>
+                                <template v-for="item in movie.m_stream_menu">
+                                    <li v-if="item?.iframeUrl" :key="item.type">
+                                        <strong>Quality:</strong> {{item.quality ?? 'Not indicated'}}<br />
+                                        <strong>Translate:</strong> {{item.translation ?? 'Not indicated'}}<br />
+                                        <a :href="item.iframeUrl" target="_blank">Watch on-line -></a>
+                                    </li>
+                                </template>
+                            </ul>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div :class="selectedSearchType === 2 ? 'show' : 'hide' ">
+            <h2>Search Movies Torrents</h2>
+            <select id="categories" @change="onCategoryChange($event)" name="f">
+                <option value="0" selected>Select category for search</option>
+                <option v-for="item in categories" :key="item.catId" :value="item.catId">{{ item.catName }}</option>
+            </select>
+            <input type="search" placeholder="Write move name or part" name="nm" @change="onMovieType($event)" :model="searchText" />
+            &nbsp;
+            <button @click="searchMovie()">Search Torrents</button>
+            <br /><br />
+
+            <div id="result">
+                <ul>
+                    <li v-for="movie in movies" :key="movie.m_id">{{ movie.m_title }} <button @click="getMovieInfo(movie.m_id)">get movie info</button></li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="movie-info" :class="['movieInfo', movieInfo ? 'show' : '']">
+            {{ movieInfo }}
+            <button @click="play(movieInfo)">Play Movie</button>
+        </div>
+
+        <video :src="videoUrl" controls autoplay :class=['hide']></video>
+
+    </div>
+    <script>
+        const { createApp, ref } = Vue
+        const  searchType = {
+                'kinopoisk': 1,
+                'rutracker': 2,
+            }
+        createApp({
+            data() {
+                return {
+                    searchText: '',
+                    selectedCategory: 0,
+                    selectedSearchType: 1,
+                    movies: [],
+                    torrents: [],
+                    movieInfo: null,
+                    categories: [],
+                    activeVideo: null,
+                }
+            },
+            computed: {
+                videoUrl: ({ activeVideo }) => activeVideo ? `/stream/video/${activeVideo.m_magnet}/${activeVideo.m_file}` : '',
+            },
+            methods: {
+                async play(movie) {
+                    console.log('Play')
+                    const response = await axios.get(`/stream/add/${movie.m_magnet}`)
+                    debugger
+                    if (response.data.result) {
+                        const { data } = response.data.result;
+                        const m_file = {
+                            m_file: ''
+                        }
+
+                        if(data.length === 1) {
+                            m_file.m_file = data[0].name
+                        }
+
+                        Object.assign(movie, m_file)
+                        this.activeVideo = movie;
+                    }
+                },
+                async searchMovie() {
+                    const nm = this.searchText;
+                    let searchUrl = `/movies/kinosearch?nm=${nm}`
+
+                    if (this.selectedSearchType === 2) {
+                        const f = this.selectedCategory;
+                        if (f === 0) {
+                            alert(`Select any category for your search!`)
+                            return false;
+                        }
+                        searchUrl = `/movies/search?f=${f}&nm=${nm}`
+                    }
+
+                    const response = await axios.get(searchUrl)
+
+                    if (response.data.result) {
+                        const { data } = response.data.result;
+                        this.movies = data;
+                    }
+                },
+                async getMovieInfo(m_id) {
+
+                    const response = await axios.get(`/movies/movieinfo?t=${m_id}`)
+
+                    if (response.data.result) {
+                        const { data } = response.data.result;
+                        this.movieInfo = data;
+                    }
+                },
+                onCategoryChange(event) {
+                    this.selectedCategory = event.target.value
+                },
+                onMovieType(event) {
+                    this.searchText = event.target.value
+                },
+                async getCategories() {
+                    const response = await axios.get(`/movies/category`)
+                    if (response.data.result) {
+                        const { data } = response.data.result;
+                        this.categories = data;
+                    }
+                },
+                async getTorrentsInfo(nm) {
+                    const f = this.selectedCategory;
+                    const searchUrl = `/movies/search?f=${f}&nm=${nm}`
+                    const response = await axios.get(searchUrl)
+
+                    if (response.data.result) {
+                        const { data } = response.data.result;
+                        this.torrents = data;
+                    }
+                },
+                async getStreams(m_id) {
+
+                    let indxMove = null
+                    const movie = this.movies.find((item, index) => {
+                        if (item.m_id == m_id){
+                            indxMove = index
+                            return item
+                        }
+                    })
+
+                    if (movie.m_stream_menu.length > 0) {
+                        return movie.m_stream_menu
+                    }
+
+                    const streamUrl = `/movies/streams?id=${m_id}`
+                    const response = await axios.get(streamUrl)
+
+                    if (response.data.result) {
+                        const { data } = response.data.result;
+                        this.movies[indxMove].m_stream_menu = this.movies[indxMove].m_stream_menu.concat(data);
+                        return true
+                    }
+
+                    return false;
+                }
+            },
+            mounted() {
+                console.log("I am in mounted!!!")
+                this.getCategories()
+            }
+        }).mount('#app')
+    </script>
+    <style>
+        html {
+            font-family: Verdana, Geneva, Tahoma, sans-serif;
+            font-size: medium;
+        }
+        .movieInfo {
+            font-size: 1.2em;
+            display: none;
+        }
+        .show {
+            display: block !important;
+        }
+        .hide {
+            display: none !important;
+        }
+        #result ul {
+            list-style-type: none !important;
+        }
+        #result > ul > li {
+            border-bottom: darkblue dashed;
+            margin: 15px 0;
+            padding-bottom: 15px;
+        }
+
+        #streams > ul {
+            margin: 5px;
+            padding: 0;
+            font-size: small;
+        }
+
+        #streams > ul > li {
+            margin: 10px 0;
+            padding: 0;
+        }
+    </style>
+</body>
+
+</html>
